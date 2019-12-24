@@ -3,7 +3,6 @@ import time
 import arcade
 import numpy as np
 import itertools
-from random import choice
 
 arcade.Sprite
 
@@ -69,6 +68,8 @@ TETRIMINOS = [
               [1, 1, 1],
               [0, 0, 0]]) * BLOCK_VIOLET,
 ]
+
+UPCOMING_TETRIMINOS_INDICES = np.random.randint(len(TETRIMINOS), size=100000)
 
 
 class Tetrimino(object):
@@ -195,7 +196,8 @@ class TetrisGrid(object):
         self.grid_left = center_x - self.grid_width//2
         self.grid_top = center_y + self.grid_height//2
         self.current_tetrimino = None
-        self.pace = 0.1  # initial pace; move the tetrimino down each second
+        self.next_tetrimino_index = 0
+        self.pace = 0.5  # initial pace; move the tetrimino down each second
 
     def set_block(self, row, col, val):
         if row < 0 or row >= self.rows or \
@@ -219,16 +221,27 @@ class TetrisGrid(object):
         arcade.draw_rectangle_outline(self.center_x, self.center_y, self.grid_width, self.grid_height,
                                       arcade.color.GREEN)
 
-    def render_grid(self):
+    def __render_blocks(self, blocks, row_shift=0, col_shift=0):
         block_x_shift = BLOCK_WIDTH // 2
         block_y_shift = BLOCK_HEIGHT // 2
-        for row, col in itertools.product(range(self.rows), range(self.cols)):
-            block = self.grid[row, col]
-            if block == 0:
+        for row, col in list(itertools.product(*map(range, blocks.shape))):
+            block = blocks[row, col]
+            if block == BLOCK_EMPTY:
                 continue
-            center_x, center_y = self.get_block_screen_pos(row, col)
+            center_x, center_y = self.get_block_screen_pos(
+                row + row_shift, col + col_shift)
             arcade.draw_texture_rectangle(
                 center_x, center_y, BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_TEXTURES[block])
+        pass
+
+    def render_grid(self):
+        self.__render_blocks(self.grid)
+
+    def render_upcoming_tetriminos(self):
+        for i in range(3):
+            idx = UPCOMING_TETRIMINOS_INDICES[self.next_tetrimino_index+i]
+            tetrimino = TETRIMINOS[idx].copy()
+            self.__render_blocks(tetrimino, self.rows - 5*(i+1), -5)
 
     def remove_complete_rows(self):
         target_row = self.rows - 1
@@ -244,7 +257,9 @@ class TetrisGrid(object):
         if self.current_tetrimino is not None:
             self.current_tetrimino.place_on_grid()
             self.remove_complete_rows()
-        t = choice(TETRIMINOS).copy()
+        idx = UPCOMING_TETRIMINOS_INDICES[self.next_tetrimino_index]
+        self.next_tetrimino_index += 1
+        t = TETRIMINOS[idx].copy()
         rows, cols = t.shape
         row = -rows + 1
         col = (GRID_COLS - cols)//2
@@ -259,6 +274,7 @@ class TetrisGrid(object):
         self.current_tetrimino.place_on_grid()
         self.render_border()
         self.render_grid()
+        self.render_upcoming_tetriminos()
         self.current_tetrimino.remove_from_grid()
 
     def on_key_press(self, key, modifiers):
