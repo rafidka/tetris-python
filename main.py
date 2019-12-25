@@ -74,13 +74,12 @@ UPCOMING_TETRIMINOS_INDICES = np.random.randint(len(TETRIMINOS), size=100000)
 
 
 class Tetrimino(object):
-    def __init__(self, tetris_grid, tetrimino, row, col):
+    def __init__(self, tetris_grid, tetrimino):
         self.tetris_grid = tetris_grid
         self.tetrimino = tetrimino
-        self.row = row
-        self.col = col
         self.placed = False
         self.last_move_epoch = None
+        self.put_at_screen_top()
 
     def is_valid_position(self, tetrimino, row, col):
         """
@@ -152,6 +151,11 @@ class Tetrimino(object):
     def drop(self):
         while self.move_down():
             pass
+    
+    def put_at_screen_top(self):
+        rows, cols = self.tetrimino.shape
+        self.row = -rows + 1
+        self.col = (GRID_COLS - cols)//2
 
     def update(self, game):
         if self.last_move_epoch is None:
@@ -197,6 +201,7 @@ class TetrisGrid(object):
         self.grid_left = center_x - self.grid_width//2
         self.grid_top = center_y + self.grid_height//2
         self.current_tetrimino = None
+        self.shelved_tetrimino = None
         self.next_tetrimino_index = 0
         self.pace = 0.5  # initial pace; move the tetrimino down each second
 
@@ -233,7 +238,6 @@ class TetrisGrid(object):
                 row + row_shift, col + col_shift)
             arcade.draw_texture_rectangle(
                 center_x, center_y, BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_TEXTURES[block])
-        pass
 
     def render_grid(self):
         self.__render_blocks(self.grid)
@@ -243,6 +247,11 @@ class TetrisGrid(object):
             idx = UPCOMING_TETRIMINOS_INDICES[self.next_tetrimino_index+i]
             tetrimino = TETRIMINOS[idx].copy()
             self.__render_blocks(tetrimino, self.rows - 5*(i+1), -5)
+
+    def render_shelved_tetrimino(self):
+        if self.shelved_tetrimino is None:
+            return
+        self.__render_blocks(self.shelved_tetrimino.tetrimino, self.rows - 5*(5), -5)
 
     def remove_complete_rows(self):
         target_row = self.rows - 1
@@ -255,19 +264,31 @@ class TetrisGrid(object):
         self.grid = new_grid
 
     def new_tetrimino(self):
-        if self.current_tetrimino is not None:
-            self.current_tetrimino.place_on_grid()
-            self.remove_complete_rows()
         idx = UPCOMING_TETRIMINOS_INDICES[self.next_tetrimino_index]
         self.next_tetrimino_index += 1
         t = TETRIMINOS[idx].copy()
-        rows, cols = t.shape
-        row = -rows + 1
-        col = (GRID_COLS - cols)//2
-        self.current_tetrimino = Tetrimino(self, t, row, col)
+        self.current_tetrimino = Tetrimino(self, t)
+
+    def place_current_tetrimino(self):
+        if self.current_tetrimino is not None:
+            self.current_tetrimino.place_on_grid()
+            self.remove_complete_rows()
+
+    def shelve_tetrimino(self):
+        if self.current_tetrimino is None:
+            return
+        self.current_tetrimino.remove_from_grid()
+        if self.shelved_tetrimino is not None:
+            self.current_tetrimino, self.shelved_tetrimino = \
+                self.shelved_tetrimino, self.current_tetrimino
+            self.current_tetrimino.put_at_screen_top()
+        else:
+            self.shelved_tetrimino = self.current_tetrimino
+            self.new_tetrimino()
 
     def update(self, game):
         if self.current_tetrimino is None or self.current_tetrimino.placed:
+            self.place_current_tetrimino()
             self.new_tetrimino()
         self.current_tetrimino.update(game)
 
@@ -276,6 +297,7 @@ class TetrisGrid(object):
         self.render_border()
         self.render_grid()
         self.render_upcoming_tetriminos()
+        self.render_shelved_tetrimino()
         self.current_tetrimino.remove_from_grid()
 
     def on_key_press(self, key, modifiers):
@@ -285,13 +307,14 @@ class TetrisGrid(object):
             self.current_tetrimino.move_left()
         if key == arcade.key.DOWN:
             self.current_tetrimino.move_down()
-        if key == arcade.key.UP:
+        if key == arcade.key.UP or key == arcade.key.SPACE:
             self.current_tetrimino.drop()
-            self.new_tetrimino()
         if key == arcade.key.A:
             self.current_tetrimino.rotate_ccw()
-        if key == arcade.key.O:
+        if key == arcade.key.E:
             self.current_tetrimino.rotate_cw()
+        if key == arcade.key.O:
+            self.shelve_tetrimino()
 
 
 class TetrisGame(arcade.Window):
