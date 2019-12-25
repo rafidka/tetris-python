@@ -3,6 +3,7 @@ import time
 import arcade
 import numpy as np
 import itertools
+from arcade.sound import Sound
 
 arcade.Sprite
 
@@ -304,6 +305,15 @@ class TetrisGame(arcade.Window):
 
     def setup(self):
         self.background = arcade.load_texture("images/background.jpg")
+        self.play_music()
+
+    def play_music(self):
+        try:
+            file_name = "music/Tetris.mp3"
+            sound = Sound(file_name)
+            sound.play()
+        except Exception as e:
+            print(f'Unable to load sound file: "{file_name}". Exception: {e}.')
 
     def add_object(self, obj):
         """
